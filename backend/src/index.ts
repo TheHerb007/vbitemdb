@@ -8,6 +8,7 @@ import schemaRoutes from './routes/schema';
 import tablesRoutes from './routes/tables';
 import columnsRoutes from './routes/columns';
 import eqRoutes from './routes/eq';
+import neweqRoutes from './routes/neweq';
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 // Public routes
 app.use('/api/auth', authRoutes);
 app.use('/api/eq', eqRoutes);
+app.use('/api/neweq', neweqRoutes);
 
 // Protected routes
 app.use('/api/schema', authMiddleware, schemaRoutes);
