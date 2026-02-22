@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { parseItemText } from '../services/parser';
+import { generateStats } from '../services/stats';
 
 const router = Router();
 
@@ -23,22 +24,36 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
 
 // POST /api/neweq — parse raw item text and insert into neweq table
 router.post('/', async (req: Request, res: Response): Promise<void> => {
-  const { text } = req.body;
+  const { text, zone, load, quest } = req.body;
 
   if (!text || typeof text !== 'string' || !text.trim()) {
     res.status(400).json({ error: 'Request body must include a "text" field' });
     return;
   }
 
-  const item = parseItemText(text);
+  const parsed = parseItemText(text);
 
-  if (!item.name) {
+  if (!parsed.name) {
     res.status(400).json({ error: 'Could not parse item name from text' });
     return;
   }
 
-  const columns = Object.keys(item) as (keyof typeof item)[];
-  const values = columns.map(c => item[c]);
+  // Merge metadata from the form
+  const meta: Record<string, unknown> = {};
+  if (zone && typeof zone === 'string') meta.zone = zone;
+  if (load && typeof load === 'string') meta.load = load;
+  if (quest && typeof quest === 'string') meta.quest = quest;
+  meta.DATE = new Date().toISOString().slice(0, 10);
+
+  // Generate short_stats and long_stats
+  const fullItem = { ...parsed, zone: meta.zone as string | undefined, load: meta.load as string | undefined, quest: meta.quest as string | undefined };
+  const { short_stats, long_stats } = generateStats(fullItem);
+  meta.short_stats = short_stats;
+  meta.long_stats = long_stats;
+
+  const item = { ...parsed, ...meta };
+  const columns = Object.keys(item);
+  const values = columns.map(c => (item as Record<string, unknown>)[c]);
   const colList = columns.map(c => `\`${c}\``).join(', ');
   const placeholders = columns.map(() => '?').join(', ');
 
@@ -49,7 +64,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       `INSERT INTO neweq (${colList}) VALUES (${placeholders})`,
       values
     );
-    res.json({ success: true, name: item.name, parsed: item });
+    res.json({ success: true, name: parsed.name, parsed: item });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('neweq insert error:', msg);

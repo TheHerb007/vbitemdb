@@ -9,6 +9,7 @@ import tablesRoutes from './routes/tables';
 import columnsRoutes from './routes/columns';
 import eqRoutes from './routes/eq';
 import neweqRoutes from './routes/neweq';
+import zonesRoutes from './routes/zones';
 
 const app = express();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/eq', eqRoutes);
 app.use('/api/neweq', neweqRoutes);
+app.use('/api/zones', zonesRoutes);
 
 // Protected routes
 app.use('/api/schema', authMiddleware, schemaRoutes);

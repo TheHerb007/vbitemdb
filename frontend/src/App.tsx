@@ -23,10 +23,28 @@ interface PendingItem {
 
 // ── Add Item Modal ────────────────────────────────────────────────────────────
 
+const LOAD_OPTIONS = [
+  { value: 'R', label: 'R — Random' },
+  { value: 'Q', label: 'Q — Quest' },
+  { value: 'N', label: 'N — Normal' },
+  { value: 'S', label: 'S — Store' },
+  { value: 'X', label: 'X — Other' },
+]
+
 function AddItemModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('')
+  const [load, setLoad] = useState('R')
+  const [zone, setZone] = useState('')
+  const [zones, setZones] = useState<string[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    fetch('/api/zones')
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.zones)) setZones(d.zones) })
+      .catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault()
@@ -36,7 +54,7 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
       const res = await fetch('/api/neweq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, load, zone }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -71,6 +89,25 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
+          <div className="add-fields-row">
+            <div className="add-field">
+              <label className="add-label">Load</label>
+              <select className="add-select" value={load} onChange={e => setLoad(e.target.value)}>
+                {LOAD_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="add-field add-field-wide">
+              <label className="add-label">Zone</label>
+              <select className="add-select" value={zone} onChange={e => setZone(e.target.value)}>
+                <option value="">— Select zone —</option>
+                {zones.map(z => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <label className="add-label">Paste item data below</label>
           <textarea
             className="add-textarea"
@@ -269,7 +306,7 @@ export default function App() {
         </div>
         <div className="header-btns">
           <button className="add-btn" onClick={() => setShowAddModal(true)}>+ Add New Item</button>
-          <button className="approve-header-btn" onClick={() => setShowApproveModal(true)}>✓ Approve New Items</button>
+          {/* <button className="approve-header-btn" onClick={() => setShowApproveModal(true)}>✓ Approve New Items</button> */}
         </div>
       </header>
 
