@@ -186,6 +186,28 @@ body {
   max-width: 760px;
 }
 
+/* Password modal */
+.modal-narrow {
+  max-width: 360px;
+}
+
+.pw-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.pw-input:focus {
+  border-color: var(--accent);
+}
+
 .approve-status {
   color: var(--text-secondary);
   font-size: 0.875rem;
@@ -212,6 +234,11 @@ body {
   border-radius: var(--radius);
 }
 
+.approve-row-dup {
+  border-color: #b45309;
+  background: rgba(180, 83, 9, 0.08);
+}
+
 .approve-info {
   display: flex;
   flex-direction: column;
@@ -222,14 +249,34 @@ body {
 .approve-name {
   font-size: 0.875rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dup-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  cursor: default;
 }
 
 .approve-meta {
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.approve-long-stats {
+  font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .approve-btns {
@@ -323,6 +370,23 @@ body {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Confirmation dialog backdrop (layered above the approve modal) */
+.modal-backdrop.confirm-backdrop {
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-msg {
+  font-size: 0.875rem;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.confirm-action-btn {
+  padding: 0.5rem 1.1rem;
+  font-size: 0.875rem;
 }
 
 /* Modal */
@@ -560,6 +624,34 @@ body {
 
 .add-textarea:focus {
   border-color: var(--accent);
+}
+
+.item-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.item-preview-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+
+.item-preview-text {
+  font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .add-textarea::placeholder {

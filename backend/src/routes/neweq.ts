@@ -2,18 +2,46 @@ import { Router, Request, Response } from 'express';
 import pool from '../db';
 import { parseItemText } from '../services/parser';
 import { generateStats } from '../services/stats';
+import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/neweq — list all pending items
+// GET /api/neweq — list all pending items, flagging names that already exist in eq
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   let conn;
   try {
     conn = await pool.getConnection();
     const rows = await conn.query(
-      'SELECT name, TYPE, worn, wt, VALUE, ac, hit, dam, keywords FROM neweq ORDER BY name'
+      'SELECT name, TYPE, worn, wt, VALUE, ac, hit, dam, keywords, long_stats FROM neweq ORDER BY name'
     );
-    res.json({ items: [...rows] });
+    const items = [...rows] as Array<Record<string, unknown>>;
+    if (items.length > 0) {
+      const names = items.map(r => r.name as string);
+      const placeholders = names.map(() => '?').join(', ');
+
+      // Discover all neweq columns, excluding metadata/derived fields
+      const EXCLUDE = new Set(['DATE', 'long_stats', 'short_stats']);
+      const colRows = await conn.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'neweq'
+         ORDER BY ORDINAL_POSITION`
+      );
+      const cols = (colRows as Array<{ COLUMN_NAME: string }>)
+        .map(r => r.COLUMN_NAME)
+        .filter(c => !EXCLUDE.has(c));
+
+      // NULL-safe equality join on every non-metadata column
+      const joinCond = cols.map(c => `e.\`${c}\` <=> n.\`${c}\``).join(' AND ');
+      const existing = await conn.query(
+        `SELECT n.name FROM neweq n
+         INNER JOIN eq e ON ${joinCond}
+         WHERE n.name IN (${placeholders})`,
+        names
+      );
+      const existingSet = new Set((existing as Array<{ name: string }>).map(r => r.name));
+      items.forEach(item => { item.duplicate = existingSet.has(item.name as string); });
+    }
+    res.json({ items });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: 'Failed to fetch neweq items', detail: msg });
@@ -22,8 +50,28 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
   }
 });
 
-// POST /api/neweq — parse raw item text and insert into neweq table
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+// POST /api/neweq/preview — parse text and return long_stats without inserting
+router.post('/preview', async (req: Request, res: Response): Promise<void> => {
+  const { text, zone, load, quest } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    res.json({ preview: null }); return;
+  }
+  const parsed = parseItemText(text);
+  if (!parsed.name) {
+    res.json({ preview: null }); return;
+  }
+  const fullItem = {
+    ...parsed,
+    zone: typeof zone === 'string' ? zone : undefined,
+    load: typeof load === 'string' ? load : undefined,
+    quest: typeof quest === 'string' ? quest : undefined,
+  };
+  const { long_stats } = generateStats(fullItem);
+  res.json({ preview: long_stats });
+});
+
+// POST /api/neweq — parse raw item text and insert into neweq table (auth required)
+router.post('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const { text, zone, load, quest } = req.body;
 
   if (!text || typeof text !== 'string' || !text.trim()) {
@@ -74,8 +122,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// POST /api/neweq/:name/approve — copy row to eq then delete from neweq
-router.post('/:name/approve', async (req: Request, res: Response): Promise<void> => {
+// POST /api/neweq/:name/approve — copy row to eq then delete from neweq (auth required)
+router.post('/:name/approve', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const name = req.params.name as string;
   let conn;
   try {
@@ -101,8 +149,8 @@ router.post('/:name/approve', async (req: Request, res: Response): Promise<void>
   }
 });
 
-// DELETE /api/neweq/:name — reject and remove from neweq
-router.delete('/:name', async (req: Request, res: Response): Promise<void> => {
+// DELETE /api/neweq/:name — reject and remove from neweq (auth required)
+router.delete('/:name', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   const name = req.params.name as string;
   let conn;
   try {

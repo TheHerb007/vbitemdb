@@ -19,6 +19,8 @@ interface PendingItem {
   hit?: number
   dam?: number
   keywords?: string
+  long_stats?: string
+  duplicate?: boolean
 }
 
 // ── Zone Select ──────────────────────────────────────────────────────────────
@@ -102,13 +104,15 @@ const LOAD_OPTIONS = [
   { value: 'X', label: 'X — Other' },
 ]
 
-function AddItemModal({ onClose }: { onClose: () => void }) {
+function AddItemModal({ token, onClose, onAuthFailed }: { token: string; onClose: () => void; onAuthFailed: () => void }) {
   const [text, setText] = useState('')
   const [load, setLoad] = useState('R')
   const [zone, setZone] = useState('')
   const [zones, setZones] = useState<string[]>([])
+  const [preview, setPreview] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const previewDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     fetch('/api/zones')
@@ -117,6 +121,24 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
       .catch(() => {})
   }, [])
 
+  // Debounced preview: fires 400ms after text/load/zone change
+  useEffect(() => {
+    if (previewDebounce.current) clearTimeout(previewDebounce.current)
+    if (!text.trim()) { setPreview(null); return }
+    previewDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/neweq/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, load, zone }),
+        })
+        const data = await res.json()
+        setPreview(data.preview ?? null)
+      } catch { setPreview(null) }
+    }, 400)
+    return () => { if (previewDebounce.current) clearTimeout(previewDebounce.current) }
+  }, [text, load, zone])
+
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault()
     setStatus('loading')
@@ -124,9 +146,10 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
     try {
       const res = await fetch('/api/neweq', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ text, load, zone }),
       })
+      if (res.status === 401) { onAuthFailed(); return }
       const data = await res.json()
       if (!res.ok) {
         setStatus('error')
@@ -135,6 +158,7 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
         setStatus('success')
         setMessage(`Saved: ${data.name}`)
         setText('')
+        setPreview(null)
       }
     } catch {
       setStatus('error')
@@ -183,6 +207,12 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
             placeholder="Paste item text here..."
             autoFocus
           />
+          {preview && (
+            <div className="item-preview">
+              <span className="item-preview-label">Preview</span>
+              <span className="item-preview-text">{preview}</span>
+            </div>
+          )}
           {status === 'error' && <p className="modal-error">{message}</p>}
           {status === 'success' && <p className="modal-success">{message}</p>}
           <div className="modal-actions">
@@ -197,13 +227,88 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ── Password Modal ────────────────────────────────────────────────────────────
+
+function PasswordModal({ onSuccess, onClose }: { onSuccess: (token: string) => void; onClose: () => void }) {
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Incorrect password')
+      } else {
+        onSuccess(data.token)
+      }
+    } catch {
+      setError('Could not reach the server')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={handleBackdrop}>
+      <div className="modal modal-narrow">
+        <div className="modal-header">
+          <h2 className="modal-title">Admin Access</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <label className="add-label">Password</label>
+          <input
+            className="pw-input"
+            type="password"
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError('') }}
+            placeholder="Enter admin password"
+            autoFocus
+          />
+          {error && <p className="modal-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="cancel-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="submit-btn" disabled={!password || busy}>
+              {busy ? 'Checking...' : 'Unlock'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Approve Items Modal ───────────────────────────────────────────────────────
 
-function ApproveItemsModal({ onClose }: { onClose: () => void }) {
+type PendingAction = { type: 'approve'; item: PendingItem } | { type: 'reject'; item: PendingItem }
+
+function ApproveItemsModal({ token, onClose, onAuthFailed }: { token: string; onClose: () => void; onAuthFailed: () => void }) {
   const [items, setItems] = useState<PendingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+
+  const authHeaders = { 'Authorization': `Bearer ${token}` }
 
   const fetchItems = async () => {
     setLoading(true)
@@ -221,10 +326,15 @@ function ApproveItemsModal({ onClose }: { onClose: () => void }) {
   useEffect(() => { fetchItems() }, [])
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (pendingAction) setPendingAction(null)
+        else onClose()
+      }
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [onClose, pendingAction])
 
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose()
@@ -234,7 +344,8 @@ function ApproveItemsModal({ onClose }: { onClose: () => void }) {
     setBusy(name)
     setActionError('')
     try {
-      const res = await fetch(`/api/neweq/${encodeURIComponent(name)}/approve`, { method: 'POST' })
+      const res = await fetch(`/api/neweq/${encodeURIComponent(name)}/approve`, { method: 'POST', headers: authHeaders })
+      if (res.status === 401) { onAuthFailed(); return }
       if (!res.ok) {
         const d = await res.json()
         setActionError(d.error || 'Approve failed')
@@ -252,7 +363,8 @@ function ApproveItemsModal({ onClose }: { onClose: () => void }) {
     setBusy(name)
     setActionError('')
     try {
-      const res = await fetch(`/api/neweq/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      const res = await fetch(`/api/neweq/${encodeURIComponent(name)}`, { method: 'DELETE', headers: authHeaders })
+      if (res.status === 401) { onAuthFailed(); return }
       if (!res.ok) {
         const d = await res.json()
         setActionError(d.error || 'Reject failed')
@@ -266,59 +378,115 @@ function ApproveItemsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const handleApproveClick = (item: PendingItem) => {
+    if (item.duplicate) {
+      setPendingAction({ type: 'approve', item })
+    } else {
+      approve(item.name)
+    }
+  }
+
+  const handleRejectClick = (item: PendingItem) => {
+    setPendingAction({ type: 'reject', item })
+  }
+
+  const handleConfirm = () => {
+    if (!pendingAction) return
+    if (pendingAction.type === 'approve') approve(pendingAction.item.name)
+    else reject(pendingAction.item.name)
+    setPendingAction(null)
+  }
+
   return (
-    <div className="modal-backdrop" onClick={handleBackdrop}>
-      <div className="modal modal-wide">
-        <div className="modal-header">
-          <h2 className="modal-title">Approve New Items</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-
-        {actionError && <p className="modal-error">{actionError}</p>}
-
-        {loading && <p className="approve-status">Loading...</p>}
-
-        {!loading && items.length === 0 && (
-          <p className="approve-status">No pending items.</p>
-        )}
-
-        {!loading && items.length > 0 && (
-          <div className="approve-list">
-            {items.map(item => (
-              <div key={item.name} className="approve-row">
-                <div className="approve-info">
-                  <span className="approve-name">{item.name}</span>
-                  <span className="approve-meta">
-                    {[item.TYPE, item.worn, item.hit != null ? `Hit:${item.hit}` : null, item.dam != null ? `Dam:${item.dam}` : null, item.ac != null ? `AC:${item.ac}` : null]
-                      .filter(Boolean).join(' · ')}
-                  </span>
-                </div>
-                <div className="approve-btns">
-                  <button
-                    className="approve-btn"
-                    disabled={busy === item.name}
-                    onClick={() => approve(item.name)}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className="reject-btn"
-                    disabled={busy === item.name}
-                    onClick={() => reject(item.name)}
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
+    <>
+      {pendingAction && (
+        <div className="modal-backdrop confirm-backdrop" onClick={() => setPendingAction(null)}>
+          <div className="modal modal-narrow" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">
+                {pendingAction.type === 'approve' ? 'Confirm Overwrite' : 'Confirm Deletion'}
+              </h2>
+              <button className="modal-close" onClick={() => setPendingAction(null)}>✕</button>
+            </div>
+            <p className="confirm-msg">
+              {pendingAction.type === 'approve'
+                ? <>
+                    <strong>{pendingAction.item.name}</strong> already exists in the eq table.
+                    Approving will replace the existing entry. Continue?
+                  </>
+                : <>
+                    Delete pending item <strong>{pendingAction.item.name}</strong>? This cannot be undone.
+                  </>
+              }
+            </p>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => setPendingAction(null)}>Cancel</button>
+              <button
+                className={pendingAction.type === 'approve' ? 'approve-btn confirm-action-btn' : 'reject-btn confirm-action-btn'}
+                onClick={handleConfirm}
+              >
+                {pendingAction.type === 'approve' ? 'Yes, Replace' : 'Yes, Delete'}
+              </button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="modal-actions">
-          <button className="cancel-btn" onClick={onClose}>Close</button>
+      <div className="modal-backdrop" onClick={handleBackdrop}>
+        <div className="modal modal-wide">
+          <div className="modal-header">
+            <h2 className="modal-title">Approve New Items</h2>
+            <button className="modal-close" onClick={onClose}>✕</button>
+          </div>
+
+          {actionError && <p className="modal-error">{actionError}</p>}
+
+          {loading && <p className="approve-status">Loading...</p>}
+
+          {!loading && items.length === 0 && (
+            <p className="approve-status">No pending items.</p>
+          )}
+
+          {!loading && items.length > 0 && (
+            <div className="approve-list">
+              {items.map(item => (
+                <div key={item.name} className={`approve-row${item.duplicate ? ' approve-row-dup' : ''}`}>
+                  <div className="approve-info">
+                    <span className="approve-name">
+                      {item.name}
+                      {item.duplicate && <span className="dup-badge" title="Already exists in eq table">⚠ duplicate</span>}
+                    </span>
+                    {item.long_stats && (
+                      <span className="approve-meta approve-long-stats">{item.long_stats}</span>
+                    )}
+                  </div>
+                  <div className="approve-btns">
+                    <button
+                      className="approve-btn"
+                      disabled={busy === item.name}
+                      onClick={() => handleApproveClick(item)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      className="reject-btn"
+                      disabled={busy === item.name}
+                      onClick={() => handleRejectClick(item)}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="modal-actions">
+            <button className="cancel-btn" onClick={onClose}>Close</button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -332,7 +500,43 @@ export default function App() {
   const [searched, setSearched] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showApproveModal, setShowApproveModal] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [adminToken, setAdminToken] = useState<string | null>(null)
+  const [pendingModal, setPendingModal] = useState<'add' | 'approve' | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleAddClick = () => {
+    if (adminToken) {
+      setShowAddModal(true)
+    } else {
+      setPendingModal('add')
+      setShowPasswordModal(true)
+    }
+  }
+
+  const handleApproveClick = () => {
+    if (adminToken) {
+      setShowApproveModal(true)
+    } else {
+      setPendingModal('approve')
+      setShowPasswordModal(true)
+    }
+  }
+
+  const handleAuthSuccess = (token: string) => {
+    setAdminToken(token)
+    setShowPasswordModal(false)
+    if (pendingModal === 'add') setShowAddModal(true)
+    else setShowApproveModal(true)
+    setPendingModal(null)
+  }
+
+  const handleAuthFailed = () => {
+    setAdminToken(null)
+    setShowAddModal(false)
+    setShowApproveModal(false)
+    setShowPasswordModal(true)
+  }
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -362,8 +566,9 @@ export default function App() {
 
   return (
     <div className="app">
-      {showAddModal && <AddItemModal onClose={() => setShowAddModal(false)} />}
-      {showApproveModal && <ApproveItemsModal onClose={() => setShowApproveModal(false)} />}
+      {showAddModal && adminToken && <AddItemModal token={adminToken} onClose={() => setShowAddModal(false)} onAuthFailed={handleAuthFailed} />}
+      {showPasswordModal && <PasswordModal onSuccess={handleAuthSuccess} onClose={() => setShowPasswordModal(false)} />}
+      {showApproveModal && adminToken && <ApproveItemsModal token={adminToken} onClose={() => setShowApproveModal(false)} onAuthFailed={handleAuthFailed} />}
 
       <header className="header">
         <div>
@@ -371,8 +576,8 @@ export default function App() {
           <p className="subtitle">Equipment Search</p>
         </div>
         <div className="header-btns">
-          <button className="add-btn" onClick={() => setShowAddModal(true)}>+ Add New Item</button>
-          {/* <button className="approve-header-btn" onClick={() => setShowApproveModal(true)}>✓ Approve New Items</button> */}
+          <button className="add-btn" onClick={handleAddClick}>+ Add New Item</button>
+          <button className="approve-header-btn" onClick={handleApproveClick}>✓ Approve New Items</button>
         </div>
       </header>
 
