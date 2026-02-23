@@ -15,12 +15,15 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
 
   const statsCol = stats === 'long' ? 'long_stats' : 'short_stats';
 
+  const words = name.trim().split(/\s+/).filter(Boolean);
+
   let conn;
   try {
     conn = await pool.getConnection();
+    const conditions = words.map(() => '`name` LIKE CONCAT(\'%\', ?, \'%\')').join(' AND ');
     const rows = await conn.query(
-      `SELECT \`name\`, \`${statsCol}\` FROM \`eq\` WHERE \`name\` LIKE CONCAT('%', ?, '%') ORDER BY \`name\``,
-      [name]
+      `SELECT \`name\`, \`${statsCol}\` FROM \`eq\` WHERE ${conditions} ORDER BY \`name\``,
+      words
     );
     res.json({ results: [...rows], stats: statsCol });
   } catch (err) {
