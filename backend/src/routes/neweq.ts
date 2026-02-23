@@ -19,19 +19,24 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       const names = items.map(r => r.name as string);
       const placeholders = names.map(() => '?').join(', ');
 
-      // Discover all neweq columns, excluding metadata/derived fields
-      const EXCLUDE = new Set(['DATE', 'long_stats', 'short_stats']);
+      // Discover all neweq columns, excluding metadata and location fields
+      const EXCLUDE = new Set(['DATE', 'long_stats', 'short_stats', 'load', 'zone', 'quest']);
       const colRows = await conn.query(
-        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+        `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'neweq'
          ORDER BY ORDINAL_POSITION`
       );
-      const cols = (colRows as Array<{ COLUMN_NAME: string }>)
-        .map(r => r.COLUMN_NAME)
-        .filter(c => !EXCLUDE.has(c));
+      const NUMERIC_TYPES = new Set(['tinyint','smallint','mediumint','int','bigint','float','double','decimal']);
+      const cols = (colRows as Array<{ COLUMN_NAME: string; DATA_TYPE: string }>)
+        .filter(r => !EXCLUDE.has(r.COLUMN_NAME));
 
-      // NULL-safe equality join on every non-metadata column
-      const joinCond = cols.map(c => `e.\`${c}\` <=> n.\`${c}\``).join(' AND ');
+      // COALESCE normalises NULL to the column's natural default (0 or '')
+      // so that neweq nulls match eq's stored zero/empty-string defaults
+      const joinCond = cols.map(r => {
+        const c = `\`${r.COLUMN_NAME}\``;
+        const def = NUMERIC_TYPES.has(r.DATA_TYPE) ? '0' : "''";
+        return `COALESCE(e.${c}, ${def}) <=> COALESCE(n.${c}, ${def})`;
+      }).join(' AND ');
       const existing = await conn.query(
         `SELECT n.name FROM neweq n
          INNER JOIN eq e ON ${joinCond}
@@ -99,15 +104,33 @@ router.post('/', authMiddleware, async (req: Request, res: Response): Promise<vo
   meta.short_stats = short_stats;
   meta.long_stats = long_stats;
 
-  const item = { ...parsed, ...meta };
-  const columns = Object.keys(item);
-  const values = columns.map(c => (item as Record<string, unknown>)[c]);
-  const colList = columns.map(c => `\`${c}\``).join(', ');
-  const placeholders = columns.map(() => '?').join(', ');
+  const item: Record<string, unknown> = { ...parsed, ...meta };
 
   let conn;
   try {
     conn = await pool.getConnection();
+
+    // Fill in defaults for every column not set by the parser,
+    // so neweq rows have the same 0/"" defaults as eq rows
+    const NUMERIC_TYPES = new Set(['tinyint','smallint','mediumint','int','bigint','float','double','decimal']);
+    const ALREADY_SET = new Set(['DATE', 'short_stats', 'long_stats']);
+    const schemaRows = await conn.query(
+      `SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'neweq'
+       ORDER BY ORDINAL_POSITION`
+    );
+    for (const row of schemaRows as Array<{ COLUMN_NAME: string; DATA_TYPE: string }>) {
+      if (ALREADY_SET.has(row.COLUMN_NAME)) continue;
+      if (!(row.COLUMN_NAME in item)) {
+        item[row.COLUMN_NAME] = NUMERIC_TYPES.has(row.DATA_TYPE) ? 0 : '';
+      }
+    }
+
+    const columns = Object.keys(item);
+    const values = columns.map(c => item[c]);
+    const colList = columns.map(c => `\`${c}\``).join(', ');
+    const placeholders = columns.map(() => '?').join(', ');
+
     await conn.query(
       `INSERT INTO neweq (${colList}) VALUES (${placeholders})`,
       values
