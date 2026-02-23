@@ -435,6 +435,114 @@ body {
   border-color: var(--accent);
 }
 
+/* Zone custom dropdown */
+.zone-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.zone-select-trigger {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s;
+  min-height: 2.25rem;
+}
+
+.zone-select-trigger:hover,
+.zone-select-open {
+  border-color: var(--accent);
+}
+
+.zone-select-value {
+  flex: 1;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.zone-select-value:empty::before,
+.zone-select-value[data-empty]::before {
+  content: attr(data-placeholder);
+  color: var(--text-secondary);
+}
+
+.zone-select-arrow {
+  margin-left: 0.5rem;
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.zone-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.zone-select-filter {
+  padding: 0.5rem 0.75rem;
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.8125rem;
+  outline: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.zone-select-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.zone-select-item {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+  transition: background 0.1s;
+}
+
+.zone-select-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.zone-select-item-active {
+  color: var(--accent);
+}
+
+.zone-select-blank {
+  color: var(--text-secondary);
+}
+
+.zone-select-empty {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
 .add-textarea {
   width: 100%;
   padding: 0.875rem 1rem;

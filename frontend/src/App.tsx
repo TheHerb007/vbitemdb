@@ -21,6 +21,77 @@ interface PendingItem {
   keywords?: string
 }
 
+// ── Zone Select ──────────────────────────────────────────────────────────────
+
+function ZoneSelect({ zones, value, onChange }: { zones: string[]; value: string; onChange: (v: string) => void }) {
+  const [filter, setFilter] = useState('')
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const display = value || ''
+  const filtered = filter
+    ? zones.filter(z => z.toLowerCase().includes(filter.toLowerCase()))
+    : zones
+
+  const select = (z: string) => {
+    onChange(z)
+    setFilter('')
+    setOpen(false)
+  }
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setFilter('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div className="zone-select-wrap" ref={containerRef}>
+      <div
+        className={`zone-select-trigger${open ? ' zone-select-open' : ''}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="zone-select-value">{display || '— Select zone —'}</span>
+        <span className="zone-select-arrow">▾</span>
+      </div>
+      {open && (
+        <div className="zone-select-dropdown">
+          <input
+            className="zone-select-filter"
+            placeholder="Filter zones..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            autoFocus
+          />
+          <div className="zone-select-list">
+            <div className="zone-select-item zone-select-blank" onClick={() => select('')}>
+              — Select zone —
+            </div>
+            {filtered.map(z => (
+              <div
+                key={z}
+                className={`zone-select-item${z === value ? ' zone-select-item-active' : ''}`}
+                onClick={() => select(z)}
+              >
+                {z}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="zone-select-empty">No matches</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Add Item Modal ────────────────────────────────────────────────────────────
 
 const LOAD_OPTIONS = [
@@ -100,12 +171,7 @@ function AddItemModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="add-field add-field-wide">
               <label className="add-label">Zone</label>
-              <select className="add-select" value={zone} onChange={e => setZone(e.target.value)}>
-                <option value="">— Select zone —</option>
-                {zones.map(z => (
-                  <option key={z} value={z}>{z}</option>
-                ))}
-              </select>
+              <ZoneSelect zones={zones} value={zone} onChange={setZone} />
             </div>
           </div>
           <label className="add-label">Paste item data below</label>
