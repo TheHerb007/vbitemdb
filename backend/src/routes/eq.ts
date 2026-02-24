@@ -3,27 +3,128 @@ import pool from '../db';
 
 const router = Router();
 
-// GET /api/eq/search?name=<name>&stats=long|short
+const TEXT_FIELDS = [
+  'name', 'keywords', 'zone', 'load', 'quest', 'no_id', 'bound',
+  'TYPE', 'worn', 'w_type', 'w_class', 'w_range', 'w_bonus',
+  'p_poison', 'enchant', 'crit', 'bonus', 'effects', 'called',
+  'powers', 'gearset', 's_spell', 'item_flags', 'affect_flags', 'usable_by',
+];
+
+const NUMERIC_FIELDS = new Set([
+  'wt', 'VALUE', 'ac', 'armor', 'pages', 'hp', 'p_hp',
+  'w_dice_count', 'w_dice', 'hit', 'dam',
+  'sv_spell', 'sv_bre', 'sv_para', 'sv_petri', 'sv_rod',
+  'str', 'agi', 'dex', 'con', 'POW', 'int', 'wis', 'cha',
+  'max_str', 'max_agi', 'max_dex', 'max_con', 'max_pow', 'max_int', 'max_wis', 'max_cha',
+  'luck', 'karma', 'mana', 'move', 'age', 'weight', 'height', 'mr',
+  'sf_ele', 'sf_enc', 'sf_heal', 'sf_ill', 'sf_inv', 'sf_nat', 'sf_nec', 'sf_prot', 'sf_spi', 'sf_sum',
+  'psp', 'i_quality', 'i_stutter', 'i_min', 'holds', 'weightless',
+  'pick', 'break', 'p_level', 'p_apps', 'p_hits',
+  'charge', 'max_charge', 's_level',
+  'r_unarmd', 'r_slash', 'r_bludgn', 'r_pierce', 'r_ranged', 'r_spell',
+  'r_sonic', 'r_pos', 'r_neg', 'r_psi', 'r_mental', 'r_good', 'r_evil',
+  'r_law', 'r_chaos', 'r_force', 'r_fire', 'r_cold', 'r_elect', 'r_acid', 'r_poison',
+]);
+
+// Parse inline "field:value" tokens from a name query string.
+// Supports: field:N (min), field:>N (min), field:<N (max), field:N-M (range).
+// Returns text tokens and a map of min_/max_ keys to values.
+function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: Record<string, number> } {
+  const textTokens: string[] = [];
+  const inlineFilters: Record<string, number> = {};
+  for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
+    const colon = token.indexOf(':');
+    if (colon > 0) {
+      const field = token.slice(0, colon);
+      const val = token.slice(colon + 1);
+      if (NUMERIC_FIELDS.has(field) && val !== '') {
+        const rangeMatch = val.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/);
+        if (rangeMatch) {
+          inlineFilters[`min_${field}`] = parseFloat(rangeMatch[1]);
+          inlineFilters[`max_${field}`] = parseFloat(rangeMatch[2]);
+        } else if (val.startsWith('<')) {
+          const n = parseFloat(val.slice(1));
+          if (!isNaN(n)) inlineFilters[`max_${field}`] = n;
+        } else if (val.startsWith('>')) {
+          const n = parseFloat(val.slice(1));
+          if (!isNaN(n)) inlineFilters[`min_${field}`] = n;
+        } else {
+          const n = parseFloat(val);
+          if (!isNaN(n)) inlineFilters[`min_${field}`] = n;
+        }
+        continue;
+      }
+    }
+    textTokens.push(token);
+  }
+  return { textTokens, inlineFilters };
+}
+
+// GET /api/eq/search?name=<text>&stats=long|short&min_hit=1&max_wt=10&...
+// Inline syntax in name: str:5  str:>5  str:<10  str:5-10
 router.get('/search', async (req: Request, res: Response): Promise<void> => {
   const name = req.query.name;
   const stats = req.query.stats;
-
-  if (!name || typeof name !== 'string') {
-    res.status(400).json({ error: 'Query parameter "name" is required' });
-    return;
-  }
-
   const statsCol = stats === 'long' ? 'long_stats' : 'short_stats';
 
-  const words = name.trim().split(/\s+/).filter(Boolean);
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+
+  // Parse inline filters out of the name param, then text-search remaining tokens
+  if (name && typeof name === 'string' && name.trim()) {
+    const { textTokens, inlineFilters } = parseInlineFilters(name);
+    for (const word of textTokens) {
+      const wordConds = TEXT_FIELDS.map(f => `\`${f}\` LIKE CONCAT('%', ?, '%')`).join(' OR ');
+      conditions.push(`(${wordConds})`);
+      params.push(...TEXT_FIELDS.map(() => word));
+    }
+    // Inline filters take precedence; add them now so explicit query params can still override
+    for (const [key, value] of Object.entries(inlineFilters)) {
+      if (key.startsWith('min_')) {
+        conditions.push(`\`${key.slice(4)}\` >= ?`);
+        params.push(value);
+      } else if (key.startsWith('max_')) {
+        conditions.push(`\`${key.slice(4)}\` <= ?`);
+        params.push(value);
+      }
+    }
+  }
+
+  // Explicit numeric range filters: min_<field>, max_<field>, or exact <field>=N
+  for (const [key, val] of Object.entries(req.query)) {
+    if (key === 'name' || key === 'stats') continue;
+    const value = parseFloat(val as string);
+    if (isNaN(value)) continue;
+
+    if (key.startsWith('min_')) {
+      const field = key.slice(4);
+      if (NUMERIC_FIELDS.has(field)) {
+        conditions.push(`\`${field}\` >= ?`);
+        params.push(value);
+      }
+    } else if (key.startsWith('max_')) {
+      const field = key.slice(4);
+      if (NUMERIC_FIELDS.has(field)) {
+        conditions.push(`\`${field}\` <= ?`);
+        params.push(value);
+      }
+    } else if (NUMERIC_FIELDS.has(key)) {
+      conditions.push(`\`${key}\` = ?`);
+      params.push(value);
+    }
+  }
+
+  if (conditions.length === 0) {
+    res.status(400).json({ error: 'At least one search parameter is required' });
+    return;
+  }
 
   let conn;
   try {
     conn = await pool.getConnection();
-    const conditions = words.map(() => '`name` LIKE CONCAT(\'%\', ?, \'%\')').join(' AND ');
     const rows = await conn.query(
-      `SELECT \`name\`, \`${statsCol}\` FROM \`eq\` WHERE ${conditions} ORDER BY \`name\``,
-      words
+      `SELECT \`name\`, \`${statsCol}\` FROM \`eq\` WHERE ${conditions.join(' AND ')} ORDER BY \`name\``,
+      params
     );
     res.json({ results: [...rows], stats: statsCol });
   } catch (err) {

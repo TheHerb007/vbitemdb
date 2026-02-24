@@ -18,7 +18,7 @@ app.use(express.json());
 
 app.use((req, _res, next) => {
   const ip = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() ?? req.socket.remoteAddress ?? 'unknown';
-  const timestamp = new Date().toISOString();
+  const timestamp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
   const query = Object.keys(req.query).length ? ' ' + new URLSearchParams(req.query as Record<string, string>).toString() : '';
   console.log(`[${timestamp}] - [${ip}] - ${req.method} ${req.path}${query}`);
   next();

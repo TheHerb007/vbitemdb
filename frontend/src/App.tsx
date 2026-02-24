@@ -23,6 +23,233 @@ interface PendingItem {
   duplicate?: boolean
 }
 
+// ── Filter Groups ─────────────────────────────────────────────────────────────
+
+const FILTER_GROUPS = [
+  { title: 'Combat', fields: [
+    { field: 'hit',   label: 'Hitroll' },
+    { field: 'dam',   label: 'Damroll' },
+    { field: 'armor', label: 'Armor' },
+    { field: 'ac',    label: 'AC' },
+    { field: 'hp',    label: 'HP' },
+    { field: 'mana',  label: 'Mana' },
+    { field: 'move',  label: 'Move' },
+    { field: 'mr',    label: 'Magic Resist' },
+  ]},
+  { title: 'Stats', fields: [
+    { field: 'str', label: 'STR' },
+    { field: 'agi', label: 'AGI' },
+    { field: 'dex', label: 'DEX' },
+    { field: 'con', label: 'CON' },
+    { field: 'POW', label: 'POW' },
+    { field: 'int', label: 'INT' },
+    { field: 'wis', label: 'WIS' },
+    { field: 'cha', label: 'CHA' },
+  ]},
+  { title: 'Max Stats', fields: [
+    { field: 'max_str', label: 'Max STR' },
+    { field: 'max_agi', label: 'Max AGI' },
+    { field: 'max_dex', label: 'Max DEX' },
+    { field: 'max_con', label: 'Max CON' },
+    { field: 'max_pow', label: 'Max POW' },
+    { field: 'max_int', label: 'Max INT' },
+    { field: 'max_wis', label: 'Max WIS' },
+    { field: 'max_cha', label: 'Max CHA' },
+  ]},
+  { title: 'Saves', fields: [
+    { field: 'sv_spell', label: 'vs Spell' },
+    { field: 'sv_bre',   label: 'vs Breath' },
+    { field: 'sv_para',  label: 'vs Paralysis' },
+    { field: 'sv_petri', label: 'vs Petrification' },
+    { field: 'sv_rod',   label: 'vs Rod/Staff' },
+  ]},
+  { title: 'Spell Focus', fields: [
+    { field: 'sf_ele',  label: 'Elemental' },
+    { field: 'sf_enc',  label: 'Enchantment' },
+    { field: 'sf_heal', label: 'Healing' },
+    { field: 'sf_ill',  label: 'Illusion' },
+    { field: 'sf_inv',  label: 'Invocation' },
+    { field: 'sf_nat',  label: 'Nature' },
+    { field: 'sf_nec',  label: 'Necromancy' },
+    { field: 'sf_prot', label: 'Protection' },
+    { field: 'sf_spi',  label: 'Spirit' },
+    { field: 'sf_sum',  label: 'Summoning' },
+  ]},
+  { title: 'Resists (Physical)', fields: [
+    { field: 'r_unarmd', label: 'Unarmed' },
+    { field: 'r_slash',  label: 'Slash' },
+    { field: 'r_bludgn', label: 'Bludgeon' },
+    { field: 'r_pierce', label: 'Pierce' },
+    { field: 'r_ranged', label: 'Ranged' },
+  ]},
+  { title: 'Resists (Magical)', fields: [
+    { field: 'r_spell',  label: 'Spell' },
+    { field: 'r_sonic',  label: 'Sonic' },
+    { field: 'r_fire',   label: 'Fire' },
+    { field: 'r_cold',   label: 'Cold' },
+    { field: 'r_elect',  label: 'Electric' },
+    { field: 'r_acid',   label: 'Acid' },
+    { field: 'r_poison', label: 'Poison' },
+  ]},
+  { title: 'Resists (Alignment/Psionic)', fields: [
+    { field: 'r_pos',    label: 'Positive' },
+    { field: 'r_neg',    label: 'Negative' },
+    { field: 'r_psi',    label: 'Psionic' },
+    { field: 'r_mental', label: 'Mental' },
+    { field: 'r_good',   label: 'Good' },
+    { field: 'r_evil',   label: 'Evil' },
+    { field: 'r_law',    label: 'Lawful' },
+    { field: 'r_chaos',  label: 'Chaotic' },
+    { field: 'r_force',  label: 'Force' },
+  ]},
+  { title: 'Misc', fields: [
+    { field: 'luck',   label: 'Luck' },
+    { field: 'karma',  label: 'Karma' },
+    { field: 'psp',    label: 'PSP' },
+    { field: 'age',    label: 'Age' },
+    { field: 'weight', label: 'Weight Mod' },
+    { field: 'height', label: 'Height Mod' },
+    { field: 'wt',     label: 'Item Weight' },
+    { field: 'VALUE',  label: 'Gold Value' },
+    { field: 'pages',  label: 'Pages' },
+  ]},
+  { title: 'Weapon', fields: [
+    { field: 'w_dice_count', label: 'Dice Count' },
+    { field: 'w_dice',       label: 'Dice Sides' },
+    { field: 's_level',      label: 'Scroll/Wand Level' },
+    { field: 'charge',       label: 'Charges' },
+    { field: 'max_charge',   label: 'Max Charges' },
+  ]},
+  { title: 'Instrument', fields: [
+    { field: 'i_quality', label: 'Quality' },
+    { field: 'i_stutter', label: 'Stutter' },
+    { field: 'i_min',     label: 'Min Level' },
+  ]},
+  { title: 'Container', fields: [
+    { field: 'holds',      label: 'Max Weight (lbs)' },
+    { field: 'weightless', label: 'Weightless' },
+    { field: 'pick',       label: 'Pick Bonus' },
+  ]},
+  { title: 'Poison', fields: [
+    { field: 'p_level', label: 'Poison Level' },
+    { field: 'p_apps',  label: 'Applications' },
+    { field: 'p_hits',  label: 'Hits' },
+  ]},
+]
+
+const NUMERIC_FIELD_NAMES = new Set(FILTER_GROUPS.flatMap(g => g.fields.map(f => f.field)))
+
+// Parse inline "field:value" tokens from the search string.
+// Returns { textTokens, inlineFilters } where inlineFilters uses min_/max_ keys.
+function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: Record<string, string> } {
+  const textTokens: string[] = []
+  const inlineFilters: Record<string, string> = {}
+  for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
+    const colon = token.indexOf(':')
+    if (colon > 0) {
+      const field = token.slice(0, colon)
+      const val = token.slice(colon + 1)
+      if (NUMERIC_FIELD_NAMES.has(field) && val !== '') {
+        const rangeMatch = val.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/)
+        if (rangeMatch) {
+          inlineFilters[`min_${field}`] = rangeMatch[1]
+          inlineFilters[`max_${field}`] = rangeMatch[2]
+        } else if (val.startsWith('<')) {
+          inlineFilters[`max_${field}`] = val.slice(1)
+        } else if (val.startsWith('>')) {
+          inlineFilters[`min_${field}`] = val.slice(1)
+        } else {
+          inlineFilters[`min_${field}`] = val
+        }
+        continue
+      }
+    }
+    textTokens.push(token)
+  }
+  return { textTokens, inlineFilters }
+}
+
+// ── Help Modal ────────────────────────────────────────────────────────────────
+
+function HelpModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="modal help-modal">
+        <div className="modal-header">
+          <h2 className="modal-title">Search Help</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="help-section">
+          <div className="help-section-title">Text Search</div>
+          <p className="help-prose">
+            Type one or more keywords in the search box. Every keyword must match — but they can appear in any order and in any of the following fields:
+          </p>
+          <div className="help-text-fields">
+            {['name','keywords','zone','load','quest','no_id','bound','TYPE','worn',
+              'w_type','w_class','w_range','w_bonus','p_poison','enchant','crit',
+              'bonus','effects','called','powers','gearset','s_spell','item_flags',
+              'affect_flags','usable_by'].map(f => (
+              <span key={f} className="help-tag">{f}</span>
+            ))}
+          </div>
+          <p className="help-prose help-example">
+            Example: <em>"paws cheetah"</em> finds "the paws of the cheetah" because both words appear somewhere in the item's fields.
+          </p>
+        </div>
+
+        <div className="help-section">
+          <div className="help-section-title">Inline Numeric Filters</div>
+          <p className="help-prose">
+            Add stat constraints directly in the search box using <code className="help-code">field:value</code> syntax.
+            These can be combined freely with text keywords.
+          </p>
+          <div className="help-inline-table">
+            <div className="help-inline-row"><span className="help-code">str:5</span><span>STR &ge; 5 (minimum)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&gt;5</span><span>STR &ge; 5 (explicit minimum)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&lt;10</span><span>STR &le; 10 (maximum)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:5-10</span><span>STR between 5 and 10 (range)</span></div>
+          </div>
+          <p className="help-prose help-example">
+            Example: <em>"cheetah str:3 hit:2"</em> — finds items matching "cheetah" with STR &ge; 3 and HITROLL &ge; 2.
+          </p>
+          <p className="help-prose">
+            Any field listed in the Numeric Filters section below can be used inline. The Filters panel and inline syntax can be used simultaneously.
+          </p>
+        </div>
+
+        <div className="help-section">
+          <div className="help-section-title">Numeric Filters</div>
+          <p className="help-prose">
+            Use the <strong>Filters</strong> panel below the search box to add min/max constraints on any numeric field.
+            Text search and numeric filters can be combined — all active conditions must match.
+            Leave min or max blank to apply only one bound.
+          </p>
+          {FILTER_GROUPS.map(group => (
+            <div key={group.title} className="help-group">
+              <div className="help-group-title">{group.title}</div>
+              <div className="help-field-list">
+                {group.fields.map(({ field, label }) => (
+                  <div key={field} className="help-field-row">
+                    <span className="help-field-name">{field}</span>
+                    <span className="help-field-desc">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Zone Select ──────────────────────────────────────────────────────────────
 
 function ZoneSelect({ zones, value, onChange }: { zones: string[]; value: string; onChange: (v: string) => void }) {
@@ -494,6 +721,9 @@ function ApproveItemsModal({ token, onClose, onAuthFailed }: { token: string; on
 
 export default function App() {
   const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState<Record<string, string>>({})
+  const [showFilters, setShowFilters] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [results, setResults] = useState<EqResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -538,10 +768,22 @@ export default function App() {
     setShowPasswordModal(true)
   }
 
+  const activeFilterCount = Object.values(filters).filter(v => v !== '').length
+
+  const updateFilter = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
+  const clearFilters = () => setFilters({})
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
-    if (!query.trim()) {
+    const { textTokens, inlineFilters } = parseInlineFilters(query)
+    const hasText = textTokens.length > 0
+    const hasNumeric = Object.values(filters).some(v => v !== '') || Object.keys(inlineFilters).length > 0
+
+    if (!hasText && !hasNumeric) {
       setResults([])
       setSearched(false)
       return
@@ -551,7 +793,18 @@ export default function App() {
       setLoading(true)
       setError('')
       try {
-        const res = await fetch(`/api/eq/search?name=${encodeURIComponent(query)}&stats=long`)
+        const params = new URLSearchParams()
+        if (hasText) params.set('name', textTokens.join(' '))
+        params.set('stats', 'long')
+        // Panel filters
+        for (const [key, val] of Object.entries(filters)) {
+          if (val !== '') params.set(key, val)
+        }
+        // Inline field:value filters (override panel if same key)
+        for (const [key, val] of Object.entries(inlineFilters)) {
+          params.set(key, val)
+        }
+        const res = await fetch(`/api/eq/search?${params}`)
         if (!res.ok) throw new Error('Search failed')
         const data: SearchResponse = await res.json()
         setResults(data.results)
@@ -562,13 +815,14 @@ export default function App() {
         setLoading(false)
       }
     }, 300)
-  }, [query])
+  }, [query, filters])
 
   return (
     <div className="app">
       {showAddModal && adminToken && <AddItemModal token={adminToken} onClose={() => setShowAddModal(false)} onAuthFailed={handleAuthFailed} />}
       {showPasswordModal && <PasswordModal onSuccess={handleAuthSuccess} onClose={() => setShowPasswordModal(false)} />}
       {showApproveModal && adminToken && <ApproveItemsModal token={adminToken} onClose={() => setShowApproveModal(false)} onAuthFailed={handleAuthFailed} />}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       <header className="header">
         <div>
@@ -576,6 +830,7 @@ export default function App() {
           <p className="subtitle">Equipment Search</p>
         </div>
         <div className="header-btns">
+          <button className="help-btn" onClick={() => setShowHelp(true)}>? Help</button>
           <button className="add-btn" onClick={handleAddClick}>+ Add New Item</button>
           <button className="approve-header-btn" onClick={handleApproveClick}>✓ Approve New Items</button>
         </div>
@@ -589,7 +844,7 @@ export default function App() {
           <input
             className="search-input"
             type="text"
-            placeholder="Search equipment by name..."
+            placeholder="Search by name, keywords, zone, effects..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             autoFocus
@@ -599,6 +854,54 @@ export default function App() {
           )}
         </div>
 
+        <button
+          className={`filters-toggle${showFilters ? ' active' : ''}`}
+          onClick={() => setShowFilters(v => !v)}
+        >
+          <span>⚙ Filters</span>
+          {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
+          <span className="filters-toggle-arrow">{showFilters ? '▲' : '▼'}</span>
+        </button>
+
+        {showFilters && (
+          <div className="filter-panel">
+            <div className="filter-panel-header">
+              <span className="filter-panel-title">Numeric Filters — set min and/or max for any stat</span>
+              {activeFilterCount > 0 && (
+                <button className="filter-clear-btn" onClick={clearFilters}>Clear all</button>
+              )}
+            </div>
+            <div className="filter-groups">
+              {FILTER_GROUPS.map(group => (
+                <div key={group.title} className="filter-group">
+                  <div className="filter-group-title">{group.title}</div>
+                  <div className="filter-fields">
+                    {group.fields.map(({ field, label }) => (
+                      <div key={field} className="filter-field">
+                        <span className="filter-field-label">{label}</span>
+                        <input
+                          type="number"
+                          className="filter-num-input"
+                          placeholder="min"
+                          value={filters[`min_${field}`] ?? ''}
+                          onChange={e => updateFilter(`min_${field}`, e.target.value)}
+                        />
+                        <input
+                          type="number"
+                          className="filter-num-input"
+                          placeholder="max"
+                          value={filters[`max_${field}`] ?? ''}
+                          onChange={e => updateFilter(`max_${field}`, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {error && <p className="error">{error}</p>}
       </div>
 
@@ -607,7 +910,9 @@ export default function App() {
 
         {!loading && searched && (
           <div className="result-count">
-            {results.length} result{results.length !== 1 ? 's' : ''} for "{query}"
+            {results.length} result{results.length !== 1 ? 's' : ''}
+            {query ? ` for "${query}"` : ''}
+            {activeFilterCount > 0 ? ` (${activeFilterCount} filter${activeFilterCount !== 1 ? 's' : ''} active)` : ''}
           </div>
         )}
 
@@ -623,12 +928,12 @@ export default function App() {
         )}
 
         {!loading && searched && results.length === 0 && (
-          <div className="status">No results found for "{query}"</div>
+          <div className="status">No results found{query ? ` for "${query}"` : ''}</div>
         )}
 
         {!searched && !loading && (
           <div className="empty-state">
-            <p>Enter a name above to search equipment</p>
+            <p>Enter a name or use filters to search equipment</p>
           </div>
         )}
       </main>
