@@ -27,11 +27,12 @@ const NUMERIC_FIELDS = new Set([
 ]);
 
 // Parse inline "field:value" tokens from a name query string.
-// Supports: field:N (min), field:>N (min), field:<N (max), field:N-M (range).
-// Returns text tokens and a map of min_/max_ keys to values.
-function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: Record<string, number> } {
+// Supports: field:N (=N), field:>N (>N), field:>=N (>=N), field:<N (<N), field:<=N (<=N), field:N-M (>=N AND <=M)
+interface InlineFilter { field: string; op: string; value: number }
+
+function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: InlineFilter[] } {
   const textTokens: string[] = [];
-  const inlineFilters: Record<string, number> = {};
+  const inlineFilters: InlineFilter[] = [];
   for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
     const colon = token.indexOf(':');
     if (colon > 0) {
@@ -40,17 +41,23 @@ function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters:
       if (NUMERIC_FIELDS.has(field) && val !== '') {
         const rangeMatch = val.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/);
         if (rangeMatch) {
-          inlineFilters[`min_${field}`] = parseFloat(rangeMatch[1]);
-          inlineFilters[`max_${field}`] = parseFloat(rangeMatch[2]);
-        } else if (val.startsWith('<')) {
-          const n = parseFloat(val.slice(1));
-          if (!isNaN(n)) inlineFilters[`max_${field}`] = n;
+          inlineFilters.push({ field, op: '>=', value: parseFloat(rangeMatch[1]) });
+          inlineFilters.push({ field, op: '<=', value: parseFloat(rangeMatch[2]) });
+        } else if (val.startsWith('>=')) {
+          const n = parseFloat(val.slice(2));
+          if (!isNaN(n)) inlineFilters.push({ field, op: '>=', value: n });
         } else if (val.startsWith('>')) {
           const n = parseFloat(val.slice(1));
-          if (!isNaN(n)) inlineFilters[`min_${field}`] = n;
+          if (!isNaN(n)) inlineFilters.push({ field, op: '>', value: n });
+        } else if (val.startsWith('<=')) {
+          const n = parseFloat(val.slice(2));
+          if (!isNaN(n)) inlineFilters.push({ field, op: '<=', value: n });
+        } else if (val.startsWith('<')) {
+          const n = parseFloat(val.slice(1));
+          if (!isNaN(n)) inlineFilters.push({ field, op: '<', value: n });
         } else {
           const n = parseFloat(val);
-          if (!isNaN(n)) inlineFilters[`min_${field}`] = n;
+          if (!isNaN(n)) inlineFilters.push({ field, op: '=', value: n });
         }
         continue;
       }
@@ -78,15 +85,10 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
       conditions.push(`(${wordConds})`);
       params.push(...TEXT_FIELDS.map(() => word));
     }
-    // Inline filters take precedence; add them now so explicit query params can still override
-    for (const [key, value] of Object.entries(inlineFilters)) {
-      if (key.startsWith('min_')) {
-        conditions.push(`\`${key.slice(4)}\` >= ?`);
-        params.push(value);
-      } else if (key.startsWith('max_')) {
-        conditions.push(`\`${key.slice(4)}\` <= ?`);
-        params.push(value);
-      }
+    // Inline filters — use the exact operator parsed from the syntax
+    for (const f of inlineFilters) {
+      conditions.push(`\`${f.field}\` ${f.op} ?`);
+      params.push(f.value);
     }
   }
 

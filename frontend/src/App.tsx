@@ -137,38 +137,6 @@ const FILTER_GROUPS = [
   ]},
 ]
 
-const NUMERIC_FIELD_NAMES = new Set(FILTER_GROUPS.flatMap(g => g.fields.map(f => f.field)))
-
-// Parse inline "field:value" tokens from the search string.
-// Returns { textTokens, inlineFilters } where inlineFilters uses min_/max_ keys.
-function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: Record<string, string> } {
-  const textTokens: string[] = []
-  const inlineFilters: Record<string, string> = {}
-  for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
-    const colon = token.indexOf(':')
-    if (colon > 0) {
-      const field = token.slice(0, colon)
-      const val = token.slice(colon + 1)
-      if (NUMERIC_FIELD_NAMES.has(field) && val !== '') {
-        const rangeMatch = val.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/)
-        if (rangeMatch) {
-          inlineFilters[`min_${field}`] = rangeMatch[1]
-          inlineFilters[`max_${field}`] = rangeMatch[2]
-        } else if (val.startsWith('<')) {
-          inlineFilters[`max_${field}`] = val.slice(1)
-        } else if (val.startsWith('>')) {
-          inlineFilters[`min_${field}`] = val.slice(1)
-        } else {
-          inlineFilters[`min_${field}`] = val
-        }
-        continue
-      }
-    }
-    textTokens.push(token)
-  }
-  return { textTokens, inlineFilters }
-}
-
 // ── Help Modal ────────────────────────────────────────────────────────────────
 
 function HelpModal({ onClose }: { onClose: () => void }) {
@@ -211,13 +179,15 @@ function HelpModal({ onClose }: { onClose: () => void }) {
             These can be combined freely with text keywords.
           </p>
           <div className="help-inline-table">
-            <div className="help-inline-row"><span className="help-code">str:5</span><span>STR &ge; 5 (minimum)</span></div>
-            <div className="help-inline-row"><span className="help-code">str:&gt;5</span><span>STR &ge; 5 (explicit minimum)</span></div>
-            <div className="help-inline-row"><span className="help-code">str:&lt;10</span><span>STR &le; 10 (maximum)</span></div>
-            <div className="help-inline-row"><span className="help-code">str:5-10</span><span>STR between 5 and 10 (range)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:5</span><span>STR = 5 (exactly 5)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&gt;5</span><span>STR &gt; 5 (strictly greater than 5)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&gt;=5</span><span>STR &ge; 5 (at least 5)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&lt;10</span><span>STR &lt; 10 (strictly less than 10)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:&lt;=10</span><span>STR &le; 10 (at most 10)</span></div>
+            <div className="help-inline-row"><span className="help-code">str:5-10</span><span>STR between 5 and 10 (inclusive range)</span></div>
           </div>
           <p className="help-prose help-example">
-            Example: <em>"cheetah str:3 hit:2"</em> — finds items matching "cheetah" with STR &ge; 3 and HITROLL &ge; 2.
+            Example: <em>"cheetah str:&gt;=3 hit:&gt;2"</em> — finds items matching "cheetah" with STR &ge; 3 and HITROLL &gt; 2.
           </p>
           <p className="help-prose">
             Any field listed in the Numeric Filters section below can be used inline. The Filters panel and inline syntax can be used simultaneously.
@@ -779,11 +749,9 @@ export default function App() {
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
 
-    const { textTokens, inlineFilters } = parseInlineFilters(query)
-    const hasText = textTokens.length > 0
-    const hasNumeric = Object.values(filters).some(v => v !== '') || Object.keys(inlineFilters).length > 0
+    const hasSearch = query.trim() !== '' || Object.values(filters).some(v => v !== '')
 
-    if (!hasText && !hasNumeric) {
+    if (!hasSearch) {
       setResults([])
       setSearched(false)
       return
@@ -794,15 +762,10 @@ export default function App() {
       setError('')
       try {
         const params = new URLSearchParams()
-        if (hasText) params.set('name', textTokens.join(' '))
+        if (query.trim()) params.set('name', query.trim())
         params.set('stats', 'long')
-        // Panel filters
         for (const [key, val] of Object.entries(filters)) {
           if (val !== '') params.set(key, val)
-        }
-        // Inline field:value filters (override panel if same key)
-        for (const [key, val] of Object.entries(inlineFilters)) {
-          params.set(key, val)
         }
         const res = await fetch(`/api/eq/search?${params}`)
         if (!res.ok) throw new Error('Search failed')
