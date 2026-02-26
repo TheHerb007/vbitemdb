@@ -12,9 +12,8 @@ const pool = mariadb.createPool({
   bigIntAsNumber: true,
   // Drop idle connections after 5 minutes (well under MariaDB's default wait_timeout of 8h)
   idleTimeout: 300,
-  // Test connections before handing them out; discards any the server has closed
+  // Timeout if acquiring a connection from the pool takes more than 10 seconds
   acquireTimeout: 10000,
-  pingTimeout: 3000,
 });
 
 export default pool;
