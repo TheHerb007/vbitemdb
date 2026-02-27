@@ -26,8 +26,19 @@ const NUMERIC_FIELDS = new Set([
   'r_law', 'r_chaos', 'r_force', 'r_fire', 'r_cold', 'r_elect', 'r_acid', 'r_poison',
 ]);
 
+// Lookup map: lowercase canonical name AND underscore-stripped alias → canonical field name.
+// Allows e.g. "maxagi" and "max_agi" to resolve to the same "max_agi" column.
+const FIELD_LOOKUP = new Map<string, string>();
+for (const field of NUMERIC_FIELDS) {
+  FIELD_LOOKUP.set(field.toLowerCase(), field);
+  if (field.includes('_')) {
+    FIELD_LOOKUP.set(field.replace(/_/g, '').toLowerCase(), field);
+  }
+}
+
 // Parse inline "field:value" tokens from a name query string.
 // Supports: field:N (=N), field:>N (>N), field:>=N (>=N), field:<N (<N), field:<=N (<=N), field:N-M (>=N AND <=M)
+// Field names are matched case-insensitively; underscores are optional (maxagi = max_agi).
 interface InlineFilter { field: string; op: string; value: number }
 
 function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters: InlineFilter[] } {
@@ -36,9 +47,10 @@ function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters:
   for (const token of raw.trim().split(/\s+/).filter(Boolean)) {
     const colon = token.indexOf(':');
     if (colon > 0) {
-      const field = token.slice(0, colon);
+      const fieldRaw = token.slice(0, colon);
       const val = token.slice(colon + 1);
-      if (NUMERIC_FIELDS.has(field) && val !== '') {
+      const field = FIELD_LOOKUP.get(fieldRaw.toLowerCase()) ?? null;
+      if (field !== null && val !== '') {
         const rangeMatch = val.match(/^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/);
         if (rangeMatch) {
           inlineFilters.push({ field, op: '>=', value: parseFloat(rangeMatch[1]) });
@@ -61,6 +73,12 @@ function parseInlineFilters(raw: string): { textTokens: string[]; inlineFilters:
         }
         continue;
       }
+    }
+    // No colon — check if token is a bare numeric field name (means field > 0)
+    const bareField = FIELD_LOOKUP.get(token.toLowerCase()) ?? null;
+    if (bareField !== null) {
+      inlineFilters.push({ field: bareField, op: '>', value: 0 });
+      continue;
     }
     textTokens.push(token);
   }

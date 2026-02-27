@@ -190,7 +190,7 @@ function HelpModal({ onClose }: { onClose: () => void }) {
             Example: <em>"cheetah str:&gt;=3 hit:&gt;2"</em> — finds items matching "cheetah" with STR &ge; 3 and HITROLL &gt; 2.
           </p>
           <p className="help-prose">
-            Any field listed in the Numeric Filters section below can be used inline. The Filters panel and inline syntax can be used simultaneously.
+            Any field listed in the Numeric Filters section below can be used inline. Field names are case-insensitive and underscores are optional — <code className="help-code">max_agi</code> and <code className="help-code">maxagi</code> are equivalent. The Filters panel and inline syntax can be used simultaneously.
           </p>
         </div>
 
